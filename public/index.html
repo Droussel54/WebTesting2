@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>R6 Match Tracker – Ubisoft API</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+    <h1>Rainbow Six Siege – Match Tracker</h1>
+
+    <form id="players-form">
+        <div class="platform-row">
+            <label for="platform">Platform</label>
+            <select id="platform">
+                <option value="pc">PC</option>
+                <option value="xbox">Xbox</option>
+                <option value="ps">PlayStation</option>
+            </select>
+        </div>
+
+        <div class="players-grid">
+            <div class="player-field">
+                <label>Player 1</label>
+                <input type="text" data-player-index="0" placeholder="Username" />
+            </div>
+            <div class="player-field">
+                <label>Player 2</label>
+                <input type="text" data-player-index="1" placeholder="Username" />
+            </div>
+            <div class="player-field">
+                <label>Player 3</label>
+                <input type="text" data-player-index="2" placeholder="Username" />
+            </div>
+            <div class="player-field">
+                <label>Player 4</label>
+                <input type="text" data-player-index="3" placeholder="Username" />
+            </div>
+            <div class="player-field">
+                <label>Player 5</label>
+                <input type="text" data-player-index="4" placeholder="Username" />
+            </div>
+        </div>
+
+        <button type="submit">Fetch Stats</button>
+    </form>
+
+    <div id="status"></div>
+
+    <table id="results-table" class="hidden">
+        <thead>
+        <tr>
+            <th>Username</th>
+            <th>Platform</th>
+            <th>MMR</th>
+            <th>Rank</th>
+            <th>K/D</th>
+            <th>Matches W/L</th>
+            <th>Season</th>
+            <th>History</th>
+        </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+    </table>
+
+    <div id="history-panel" class="hidden">
+        <h2 id="history-title"></h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Season</th>
+                <th>Region</th>
+                <th>MMR</th>
+                <th>Max MMR</th>
+                <th>Rank</th>
+                <th>Max Rank</th>
+            </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
