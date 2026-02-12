@@ -21,6 +21,16 @@ const operatorsHeatmap = document.getElementById("operators-heatmap");
 
 const modeToggleBtn = document.getElementById("mode-toggle");
 
+// capture default theme so we can restore on clear
+const root = document.documentElement;
+const defaultTheme = {
+    accent: getComputedStyle(root).getPropertyValue("--accent").trim(),
+    accentSoft: getComputedStyle(root).getPropertyValue("--accent-soft").trim(),
+    accentBorder: getComputedStyle(root).getPropertyValue("--accent-border").trim(),
+    accentHover: getComputedStyle(root).getPropertyValue("--accent-hover").trim(),
+    accentDark: getComputedStyle(root).getPropertyValue("--accent-dark").trim()
+};
+
 // close buttons
 document.querySelectorAll(".close-modal").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -122,7 +132,7 @@ function getRankTierColor(rank) {
     if (rank >= 15) return "#c0c0c0"; // Silver
     if (rank >= 12) return "#cd7f32"; // Bronze
     if (rank >= 9)  return "#b87333"; // Copper
-    return "#9ca3af";                 // Unranked / fallback
+    return "#9ca3af";                 // Unranked
 }
 
 function darkenHex(hex, factor = 0.4) {
@@ -152,19 +162,20 @@ function applyMatchTheme(results) {
 
     const base = getRankTierColor(highestRank);
     const dark = darkenHex(base, 0.35);
-    const accent = base;
-    const accentSoft = hexToRgba(base, 0.25);
-    const accentBorder = hexToRgba(base, 0.35);
-    const accentHover = hexToRgba(base, 0.55);
 
-    const root = document.documentElement;
-    root.style.setProperty("--accent", accent);
-    root.style.setProperty("--accent-soft", accentSoft);
-    root.style.setProperty("--accent-border", accentBorder);
-    root.style.setProperty("--accent-hover", accentHover);
+    root.style.setProperty("--accent", base);
+    root.style.setProperty("--accent-soft", hexToRgba(base, 0.22));
+    root.style.setProperty("--accent-border", hexToRgba(base, 0.35));
+    root.style.setProperty("--accent-hover", hexToRgba(base, 0.6));
     root.style.setProperty("--accent-dark", dark);
 
-    // re-apply themed button style for bootstrap-select
+    // Glow for Diamond+
+    if (highestRank >= 27) {
+        root.style.setProperty("--accent-glow", `0 0 18px ${hexToRgba(base, 0.8)}`);
+    } else {
+        root.style.setProperty("--accent-glow", "none");
+    }
+
     $('.selectpicker').selectpicker('setStyle', 'btn-platform', 'remove');
     $('.selectpicker').selectpicker('setStyle', 'btn-platform');
 }
@@ -177,6 +188,16 @@ clearTeamBtn.addEventListener("click", () => {
     statusEl.textContent = "";
     resultsEl.innerHTML = "";
     resultsEl.classList.remove("visible");
+
+    // restore original theme
+    root.style.setProperty("--accent", defaultTheme.accent);
+    root.style.setProperty("--accent-soft", defaultTheme.accentSoft);
+    root.style.setProperty("--accent-border", defaultTheme.accentBorder);
+    root.style.setProperty("--accent-hover", defaultTheme.accentHover);
+    root.style.setProperty("--accent-dark", defaultTheme.accentDark);
+
+    $('.selectpicker').selectpicker('setStyle', 'btn-platform', 'remove');
+    $('.selectpicker').selectpicker('setStyle', 'btn-platform');
 });
 
 // -------------------------------------------------------------
@@ -206,7 +227,6 @@ fetchBtn.addEventListener("click", async () => {
     resultsEl.classList.remove("visible");
     resultsEl.innerHTML = "";
 
-    // skeletons
     for (let i = 0; i < players.length; i++) {
         const sk = document.createElement("div");
         sk.className = "player-card skeleton";
@@ -262,9 +282,16 @@ function renderResults(results) {
         }
 
         const d = r.data;
-        const kd = d.general.deaths > 0
-            ? (d.general.kills / d.general.deaths).toFixed(2)
-            : "—";
+
+        // --- Compute stats ---
+        const kills = d.general?.kills ?? 0;
+        const deaths = d.general?.deaths ?? 0;
+        const matchesWon = d.general?.matchesWon ?? 0;
+        const matchesLost = d.general?.matchesLost ?? 0;
+
+        const kd = deaths > 0 ? (kills / deaths).toFixed(2) : "—";
+        const wl = `${matchesWon}/${matchesLost}`;
+        const seasonLabel = d.ranked?.season || "—";
 
         const mmrDelta = d.ranked.lastMatchMmrChange || 0;
         const mmrDeltaColor = getMMRDeltaColor(mmrDelta);
@@ -283,8 +310,10 @@ function renderResults(results) {
         const platformIcon = getPlatformIcon(d.platform);
 
         const threatScore = computeThreatScore(d);
+        const breakdown = computeThreatBreakdown(d);
         const badges = computeBadges(d);
 
+        // --- Build card ---
         card.innerHTML = `
             <div class="player-rank-icon">
                 <img src="${getRankIcon(d.ranked.rank)}" alt="Rank Icon" />
@@ -305,6 +334,14 @@ function renderResults(results) {
 
                 <div class="player-strip-bottom">
                     <div class="threat-bar-wrapper">
+                        <div class="threat-tooltip">
+                            ${breakdown.map(b => `
+                                <div class="threat-breakdown-line">
+                                    <span>${b.label}</span>
+                                    <span>${b.value}%</span>
+                                </div>
+                            `).join("")}
+                        </div>
                         <div class="threat-bar-label">Threat level</div>
                         <div class="threat-bar">
                             <div class="threat-bar-fill" style="width:${threatScore}%"></div>
@@ -320,6 +357,13 @@ function renderResults(results) {
                         <span>Top Ops:</span>
                         <div class="operator-icons">${operatorIcons}</div>
                     </div>
+                </div>
+
+                <!-- ⭐ NEW: KD / W/L / Season row -->
+                <div class="player-meta">
+                    <span class="player-meta-item">K/D: ${kd}</span>
+                    <span class="player-meta-item">W/L: ${wl}</span>
+                    <span class="player-meta-item">Season: ${seasonLabel}</span>
                 </div>
             </div>
 
@@ -339,6 +383,16 @@ function renderResults(results) {
         `;
 
         resultsEl.appendChild(card);
+        const threatWrapper = card.querySelector(".threat-bar-wrapper");
+        const tooltip = card.querySelector(".threat-tooltip");
+
+        threatWrapper.addEventListener("mouseenter", () => {
+            tooltip.classList.add("visible");
+        });
+
+        threatWrapper.addEventListener("mouseleave", () => {
+            tooltip.classList.remove("visible");
+        });
     });
 }
 
@@ -358,23 +412,28 @@ resultsEl.addEventListener("click", async (e) => {
     const res = await fetch(`/api/seasonal?username=${username}&platform=${platform}`);
     const data = await res.json();
 
+    historyTimeline.innerHTML = "";
+
     (data.history || []).forEach(h => {
         const node = document.createElement("div");
         node.className = "history-node";
+
         node.innerHTML = `
             <div class="history-node-header">
-                <img src="${getRankIcon(h.rank)}" alt="" />
+                <img src="${getRankIcon(h.rank)}" />
                 <div>
                     <div class="history-node-season">${h.season}</div>
-                    <div style="font-size:0.75rem;opacity:0.8;">${h.region}</div>
+                    <div style="font-size:0.75rem;opacity:0.7;">${h.region}</div>
                 </div>
             </div>
+
             <div class="history-node-body">
-                <div>MMR: ${h.mmr ?? "—"} (max ${h.maxMmr ?? "—"})</div>
+                <div>MMR: ${h.mmr} (max ${h.maxMmr})</div>
                 <div>Rank: ${RANK_NAME_MAP[h.rank] || "—"}</div>
                 <div>Max: ${RANK_NAME_MAP[h.maxRank] || "—"}</div>
             </div>
         `;
+
         historyTimeline.appendChild(node);
     });
 
@@ -398,31 +457,49 @@ resultsEl.addEventListener("click", async (e) => {
     operatorsHeatmap.innerHTML = "";
 
     const ops = data.operators || [];
+    if (ops.length === 0) return;
+
     const maxUsage = Math.max(...ops.map(o => o.kills + o.deaths), 1);
 
-    ops.forEach(op => {
-        const usage = op.kills + op.deaths;
-        const ratio = Math.round((usage / maxUsage) * 100);
-        const kd = op.deaths > 0 ? (op.kills / op.deaths).toFixed(2) : "—";
-        const icon = getOperatorIcon(op.name);
+    ops
+        .slice()
+        .sort((a, b) => (b.kills + b.deaths) - (a.kills + a.deaths))
+        .forEach(op => {
+            const usage = op.kills + op.deaths;
+            const ratio = Math.round((usage / maxUsage) * 100);
+            const kd = op.deaths > 0 ? (op.kills / op.deaths).toFixed(2) : "—";
+            const winrate = (op.wins + op.losses) > 0
+                ? Math.round((op.wins / (op.wins + op.losses)) * 100)
+                : 0;
 
-        const div = document.createElement("div");
-        div.className = "heatmap-card";
-        div.innerHTML = `
-            <div class="heatmap-header">
-                <img src="${icon}" alt="${capitalize(op.name)}" />
-                <span class="heatmap-name">${capitalize(op.name)}</span>
-            </div>
-            <div class="heatmap-bar-wrapper">
-                <div class="heatmap-bar">
-                    <div class="heatmap-bar-fill" style="width:${ratio}%"></div>
+            const perfColor =
+                kd >= 1.4 && winrate >= 55 ? "#00c896" :
+                kd >= 1.1 ? "#a3e635" :
+                kd >= 0.9 ? "#eab308" :
+                "#f97316";
+
+            const icon = getOperatorIcon(op.name);
+
+            const div = document.createElement("div");
+            div.className = "heatmap-card";
+
+            div.innerHTML = `
+                <div class="heatmap-header">
+                    <img src="${icon}" />
+                    <span class="heatmap-name">${capitalize(op.name)}</span>
                 </div>
-            </div>
-            <div class="heatmap-meta">
-                Usage: ${usage}+ • K/D: ${kd} • W/L: ${op.wins}/${op.losses}
-            </div>
-        `;
-        operatorsHeatmap.appendChild(div);
+
+                <div class="heatmap-bar-label">Usage intensity</div>
+                <div class="heatmap-bar">
+                    <div class="heatmap-bar-fill" style="width:${ratio}%;background:${perfColor};"></div>
+                </div>
+
+                <div class="heatmap-meta">
+                    Usage: ${usage}+ • K/D: ${kd} • W/L: ${op.wins}/${op.losses} • Winrate: ${winrate}%
+                </div>
+            `;
+
+            operatorsHeatmap.appendChild(div);
     });
 
     operatorsModal.classList.remove("hidden");
@@ -447,30 +524,78 @@ function getPlatformIcon(platform) {
 function computeThreatScore(d) {
     const rank = d.ranked?.rank ?? 0;
     const mmr = d.ranked?.mmr ?? 0;
-    const kd = d.general.deaths > 0 ? d.general.kills / d.general.deaths : 1;
-    const totalMatches = d.general.matchesWon + d.general.matchesLost;
-    const winrate = totalMatches > 0 ? d.general.matchesWon / totalMatches : 0.5;
+    const kills = d.general?.kills ?? 0;
+    const deaths = d.general?.deaths ?? 0;
+    const matchesWon = d.general?.matchesWon ?? 0;
+    const matchesLost = d.general?.matchesLost ?? 0;
+    const totalMatches = matchesWon + matchesLost;
+
+    const kd = deaths > 0 ? kills / deaths : 1;
+    const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0.5;
+    const mmrDelta = d.ranked?.lastMatchMmrChange ?? 0;
+    const opCount = (d.operators || []).length;
+
+    // normalize
+    const rankScore = Math.min(rank / 35, 1);          // 0–1
+    const mmrScore = Math.min(mmr / 6000, 1);          // 0–1
+    const kdScore = Math.min(kd / 2.5, 1);             // 0–1
+    const winScore = winrate;                          // 0–1
+    const streakScore = Math.max(Math.min(mmrDelta / 40, 1), -1); // -1–1
+    const diversityScore = opCount >= 6 ? 1 : opCount / 6;        // 0–1
 
     let score = 0;
-    score += Math.min(rank / 35, 1) * 40;
-    score += Math.min(mmr / 6000, 1) * 25;
-    score += Math.min(kd / 2.5, 1) * 20;
-    score += winrate * 15;
+    score += rankScore * 30;
+    score += mmrScore * 20;
+    score += kdScore * 20;
+    score += winScore * 15;
+    score += (streakScore * 10);       // hot/cold streak
+    score += diversityScore * 5;       // more ops = more adaptable
 
     return Math.round(Math.max(0, Math.min(100, score)));
 }
 
+function computeThreatBreakdown(d) {
+    const kills = d.general.kills;
+    const deaths = d.general.deaths;
+    const matchesWon = d.general.matchesWon;
+    const matchesLost = d.general.matchesLost;
+    const totalMatches = matchesWon + matchesLost;
+
+    const kd = deaths > 0 ? kills / deaths : 1;
+    const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0.5;
+    const mmrDelta = d.ranked.lastMatchMmrChange ?? 0;
+    const opCount = (d.operators || []).length;
+
+    return [
+        { label: "Rank", value: Math.round(Math.min(d.ranked.rank / 35, 1) * 30) },
+        { label: "MMR", value: Math.round(Math.min(d.ranked.mmr / 6000, 1) * 20) },
+        { label: "K/D", value: Math.round(Math.min(kd / 2.5, 1) * 20) },
+        { label: "Winrate", value: Math.round(winrate * 15) },
+        { label: "Streak", value: Math.round(Math.max(Math.min(mmrDelta / 40, 1), -1) * 10) },
+        { label: "Op Diversity", value: Math.round(Math.min(opCount / 6, 1) * 5) }
+    ];
+}
+
 function computeBadges(d) {
+    const kills = d.general?.kills ?? 0;
+    const deaths = d.general?.deaths ?? 0;
+    const matchesWon = d.general?.matchesWon ?? 0;
+    const matchesLost = d.general?.matchesLost ?? 0;
+    const totalMatches = matchesWon + matchesLost;
+
+    const kd = deaths > 0 ? kills / deaths : 0;
+    const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0;
+    const mmrDelta = d.ranked?.lastMatchMmrChange ?? 0;
+    const opCount = (d.operators || []).length;
+
     const badges = [];
-    const kd = d.general.deaths > 0 ? d.general.kills / d.general.deaths : 0;
-    const totalMatches = d.general.matchesWon + d.general.matchesLost;
-    const winrate = totalMatches > 0 ? d.general.matchesWon / totalMatches : 0;
 
     if (kd >= 1.5) badges.push("High KD");
     if (winrate >= 0.55) badges.push("High Winrate");
-    if ((d.ranked?.lastMatchMmrChange || 0) >= 20) badges.push("Big MMR Gain");
-    if ((d.operators || []).length <= 3 && (d.operators || []).length > 0) badges.push("One‑Trick Pool");
+    if (mmrDelta >= 20) badges.push("Big MMR Gain");
+    if (opCount <= 3 && opCount > 0) badges.push("One‑Trick Pool");
     if (d.ranked?.rank >= 30) badges.push("Top Tier");
+    if (totalMatches >= 300) badges.push("Veteran");
 
     return badges;
 }

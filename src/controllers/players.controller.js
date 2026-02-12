@@ -1,17 +1,11 @@
 // src/controllers/players.controller.js
-import { isDemoMode } from "./mode.controller.js";
-import { placeholderPlayers } from "../services/demo-data.service.js";
 import { getPlayersBatch } from "../services/ubisoft.service.js";
 
 export async function postPlayers(req, res) {
     const { players } = req.body || { players: [] };
 
-    if (isDemoMode()) {
-        const results = players.map((p, i) => ({
-            success: true,
-            data: placeholderPlayers[i % placeholderPlayers.length]
-        }));
-        return res.json({ results });
+    if (!Array.isArray(players) || players.length === 0) {
+        return res.json({ results: [] });
     }
 
     try {

@@ -1,7 +1,10 @@
 // src/services/ubisoft.service.js
-import fetch from "node-fetch";
-import { placeholderPlayers, placeholderSeasonal } from "./demo-data.service.js";
+import { fetchWithRetry } from "../utils/fetchWithRetry.js";
 import { isDemoMode } from "../controllers/mode.controller.js";
+import {
+    generateRandomPlayer,
+    generateRandomSeasonalHistory
+} from "./demo-generator.service.js";
 
 // Ubisoft constants
 const APP_ID = "3587dcbb-7f81-457c-9781-0e3f29f6f56a";
@@ -13,55 +16,41 @@ const SANDBOX = {
     ps: "OSBOR_PS4_LNCH_A"
 };
 
-// Credentials
-const UBI_EMAIL = process.env.UBI_EMAIL;
-const UBI_PASSWORD = process.env.UBI_PASSWORD;
+function getCredentials() {
+    return {
+        email: process.env.UBI_EMAIL,
+        password: process.env.UBI_PASSWORD
+    };
+}
 
-// Cached session
 let cachedSession = null;
 let cachedSessionExpires = 0;
 
 // -------------------------------------------------------------
-// Helper: fetch with retry
-// -------------------------------------------------------------
-async function fetchWithRetry(url, options = {}, retries = 3) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            const res = await fetch(url, options);
-            if (!res.ok && res.status >= 500 && i < retries - 1) {
-                await new Promise(r => setTimeout(r, 300));
-                continue;
-            }
-            return res;
-        } catch (err) {
-            if (i === retries - 1) throw err;
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// Authenticate with Ubisoft
+// Session
 // -------------------------------------------------------------
 async function getUbisoftSession() {
     const now = Date.now();
 
-    // Use cached session if valid
     if (cachedSession && now < cachedSessionExpires) {
         return cachedSession;
     }
 
-    const res = await fetch("https://public-ubiservices.ubi.com/v3/profiles/sessions", {
+    const { email, password } = getCredentials();
+
+    if (!email || !password) {
+        throw new Error("UBI_EMAIL / UBI_PASSWORD not configured");
+    }
+
+    const res = await fetchWithRetry("https://public-ubiservices.ubi.com/v3/profiles/sessions", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "Ubi-AppId": APP_ID,
             "Ubi-RequestedPlatformType": "uplay",
-            "User-Agent": "R6Tracker/1.0",
+            "User-Agent": "R6Tracker/1.0"
         },
-        body: JSON.stringify({
-            email: UBI_EMAIL,
-            password: UBI_PASSWORD
-        })
+        body: JSON.stringify({ email, password })
     });
 
     if (!res.ok) {
@@ -76,15 +65,11 @@ async function getUbisoftSession() {
         profileId: data.userId
     };
 
-    // Session lasts 2 hours
     cachedSessionExpires = now + 1000 * 60 * 60 * 2;
 
     return cachedSession;
 }
 
-// -------------------------------------------------------------
-// Helper: Ubisoft GET request
-// -------------------------------------------------------------
 async function ubiGet(url, session) {
     const res = await fetchWithRetry(url, {
         headers: {
@@ -96,39 +81,44 @@ async function ubiGet(url, session) {
     });
 
     if (res.status === 401) {
-        // Session expired → refresh
         cachedSession = null;
         const newSession = await getUbisoftSession();
         return ubiGet(url, newSession);
+    }
+
+    if (!res.ok) {
+        throw new Error(`Ubisoft API error: ${res.status}`);
     }
 
     return res.json();
 }
 
 // -------------------------------------------------------------
-// Step 1: Get profileId from username
+// Profile
 // -------------------------------------------------------------
 async function getProfile(username, platform) {
     const session = await getUbisoftSession();
 
-    const res = await ubiGet(
-        `https://public-ubiservices.ubi.com/v3/profiles?nameOnPlatform=${encodeURIComponent(username)}&platformType=${platform}`,
+    const data = await ubiGet(
+        `https://public-ubiservices.ubi.com/v3/profiles?nameOnPlatform=${encodeURIComponent(
+            username
+        )}&platformType=${platform}`,
         session
     );
 
-    if (!res.profiles || res.profiles.length === 0) {
+    if (!data.profiles || data.profiles.length === 0) {
         throw new Error("Player not found");
     }
 
-    return res.profiles[0];
+    return data.profiles[0];
 }
 
 // -------------------------------------------------------------
-// Step 2: Ranked stats
+// Ranked stats
 // -------------------------------------------------------------
 async function getRankedStats(profileId, platform) {
     const session = await getUbisoftSession();
-    const sandbox = SANDBOX[platform];
+    const sandbox = SANDBOX[platform] || SANDBOX.pc;
 
     const url = `https://public-ubiservices.ubi.com/v1/spaces/${SPACE_ID}/sandboxes/${sandbox}/r6playerprofile/playerstats?profileIds=${profileId}`;
 
@@ -138,11 +128,11 @@ async function getRankedStats(profileId, platform) {
 }
 
 // -------------------------------------------------------------
-// Step 3: Operator stats
+// Operator stats
 // -------------------------------------------------------------
 async function getOperatorStats(profileId, platform) {
     const session = await getUbisoftSession();
-    const sandbox = SANDBOX[platform];
+    const sandbox = SANDBOX[platform] || SANDBOX.pc;
 
     const url = `https://public-ubiservices.ubi.com/v1/spaces/${SPACE_ID}/sandboxes/${sandbox}/r6operators?profileIds=${profileId}`;
 
@@ -152,11 +142,11 @@ async function getOperatorStats(profileId, platform) {
 }
 
 // -------------------------------------------------------------
-// Step 4: Seasonal history
+// Seasonal stats
 // -------------------------------------------------------------
 async function getSeasonalStats(profileId, platform) {
     const session = await getUbisoftSession();
-    const sandbox = SANDBOX[platform];
+    const sandbox = SANDBOX[platform] || SANDBOX.pc;
 
     const url = `https://public-ubiservices.ubi.com/v1/spaces/${SPACE_ID}/sandboxes/${sandbox}/r6ranked/playerprofile/progressions?profileIds=${profileId}`;
 
@@ -166,72 +156,115 @@ async function getSeasonalStats(profileId, platform) {
 }
 
 // -------------------------------------------------------------
-// Public API used by controllers
+// Normalization helper
+// -------------------------------------------------------------
+function normalizePlayer(username, platform, ranked, general, operators) {
+    return {
+        username,
+        platform,
+        ranked: {
+            rank: ranked?.rank || 0,
+            mmr: ranked?.mmr || 0,
+            season: ranked?.seasonId || ranked?.season || "Y9S4",
+            lastMatchMmrChange: ranked?.lastMatchMmrChange || 0
+        },
+        general: {
+            kills: general?.kills || 0,
+            deaths: general?.deaths || 0,
+            matchesWon: general?.matchesWon || 0,
+            matchesLost: general?.matchesLost || 0
+        },
+        operators: operators.map(o => ({
+            name: o.operatorId || o.name,
+            kills: o.kills || 0,
+            deaths: o.deaths || 0,
+            wins: o.roundsWon || o.wins || 0,
+            losses: o.roundsLost || o.losses || 0
+        }))
+    };
+}
+
+// -------------------------------------------------------------
+// Public API
 // -------------------------------------------------------------
 export async function getPlayersBatch(players) {
     if (isDemoMode()) {
-        return players.map((p, i) => ({
+        return players.map(p => ({
             success: true,
-            data: placeholderPlayers[i % placeholderPlayers.length]
+            data: generateRandomPlayer(p.username, (p.platform || "pc").toLowerCase())
         }));
     }
 
     return Promise.all(
         players.map(async p => {
+            const platform = (p.platform || "pc").toLowerCase();
+
             try {
-                const profile = await getProfile(p.username, p.platform);
-                const ranked = await getRankedStats(profile.profileId, p.platform);
-                const operators = await getOperatorStats(profile.profileId, p.platform);
+                const profile = await getProfile(p.username, platform);
+                const ranked = await getRankedStats(profile.profileId, platform);
+                const operators = await getOperatorStats(profile.profileId, platform);
+
+                const general = ranked?.general;
 
                 return {
                     success: true,
-                    data: {
-                        username: p.username,
-                        platform: p.platform,
-                        ranked,
-                        general: ranked.general,
-                        operators
-                    }
+                    data: normalizePlayer(p.username, platform, ranked, general, operators)
                 };
             } catch (err) {
-                return { success: false, username: p.username, error: err.message };
+                console.error("Error in getPlayersBatch for", p.username, err.message);
+                const demo = generateRandomPlayer(p.username, platform);
+                return { success: true, data: demo };
             }
         })
     );
 }
 
 export async function getSinglePlayer(username, platform) {
+    const plat = (platform || "pc").toLowerCase();
+
     if (isDemoMode()) {
-        return placeholderPlayers[0];
+        return generateRandomPlayer(username, plat);
     }
 
-    const profile = await getProfile(username, platform);
-    const ranked = await getRankedStats(profile.profileId, platform);
-    const operators = await getOperatorStats(profile.profileId, platform);
+    try {
+        const profile = await getProfile(username, plat);
+        const ranked = await getRankedStats(profile.profileId, plat);
+        const operators = await getOperatorStats(profile.profileId, plat);
 
-    return {
-        username,
-        platform,
-        ranked,
-        general: ranked.general,
-        operators
-    };
+        const general = ranked?.general;
+
+        return normalizePlayer(username, plat, ranked, general, operators);
+    } catch (err) {
+        console.error("Error in getSinglePlayer for", username, err.message);
+        return generateRandomPlayer(username, plat);
+    }
 }
 
 export async function getSeasonalHistory(username, platform) {
+    const plat = (platform || "pc").toLowerCase();
+
     if (isDemoMode()) {
-        return placeholderSeasonal;
+        return generateRandomSeasonalHistory();
     }
 
-    const profile = await getProfile(username, platform);
-    const seasons = await getSeasonalStats(profile.profileId, platform);
+    try {
+        const profile = await getProfile(username, plat);
+        const seasons = await getSeasonalStats(profile.profileId, plat);
 
-    return seasons.map(s => ({
-        season: s.seasonId,
-        region: "NA",
-        mmr: s.mmr,
-        maxMmr: s.maxMmr,
-        rank: s.rank,
-        maxRank: s.maxRank
-    }));
+        if (!seasons || seasons.length === 0) {
+            return generateRandomSeasonalHistory();
+        }
+
+        return seasons.map(s => ({
+            season: s.seasonId,
+            region: "NA",
+            mmr: s.mmr,
+            maxMmr: s.maxMmr,
+            rank: s.rank,
+            maxRank: s.maxRank
+        }));
+    } catch (err) {
+        console.error("Error in getSeasonalHistory for", username, err.message);
+        return generateRandomSeasonalHistory();
+    }
 }

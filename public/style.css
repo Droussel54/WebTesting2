@@ -419,10 +419,29 @@ header p {
     flex-wrap: wrap;
 }
 
+/* Player meta stats row (KD, W/L, Season) */
+.player-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+.player-meta-item {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--surface-blur);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
 /* Threat bar */
 .threat-bar-wrapper {
-    flex: 1;
+    position: relative;
+    flex: 0 0 auto;
     min-width: 160px;
+    max-width: 200px;
 }
 
 .threat-bar-label {
@@ -456,12 +475,39 @@ header p {
     opacity: 0.85;
 }
 
+.threat-tooltip {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    background: rgba(15,15,25,0.95);
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.75rem;
+    width: 220px;
+    display: none;
+    z-index: 20;
+}
+
+.threat-tooltip.visible {
+    display: block;
+}
+
+.threat-breakdown-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
 /* Micro-badges */
 .player-badges {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     font-size: 0.75rem;
+    flex: 1 1 auto; 
+    min-width: 120px;
 }
 
 .badge {
@@ -593,118 +639,118 @@ header p {
 
 /* Seasonal History Timeline – brighter */
 .history-timeline {
-    margin-top: 18px;
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-    overflow-x: auto;
-    padding-bottom: 4px;
-}
-
-.history-node {
-    min-width: 140px;
-    background: rgba(15,23,42,0.9);
-    border-radius: var(--radius-sm);
-    padding: 10px;
-    border: 1px solid var(--accent-soft);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
     position: relative;
+    display: flex;
+    gap: 32px;
+    padding: 40px 10px 20px;
+    overflow-x: auto;
 }
 
-.history-node::after {
+/* Each season node */
+.history-node {
+    position: relative;
+    min-width: 200px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(15, 15, 25, 0.9);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+}
+
+/* The dot that sits ON the line */
+.history-node::before {
     content: "";
     position: absolute;
-    top: 50%;
-    right: -10px;
-    width: 16px;
-    height: 2px;
-    background: var(--accent-soft);
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    border: 2px solid rgba(255,255,255,0.4);
 }
 
-.history-node:last-child::after {
-    display: none;
-}
-
+/* Header */
 .history-node-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+    margin-bottom: 8px;
 }
 
 .history-node-header img {
-    width: 24px;
-    height: 24px;
+    width: 36px;
+    height: 36px;
 }
 
 .history-node-season {
-    font-size: 0.85rem;
     font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
 }
 
+/* Body */
 .history-node-body {
-    font-size: 0.8rem;
-    opacity: 0.95;
+    font-size: 0.85rem;
+    opacity: 0.9;
+    display: grid;
+    gap: 3px;
 }
 
 /* Operators Heatmap – brighter */
 .operators-heatmap {
-    margin-top: 18px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 16px;
 }
 
 .heatmap-card {
-    background: rgba(15,23,42,0.9);
-    border-radius: var(--radius-sm);
-    padding: 10px;
-    border: 1px solid var(--accent-soft);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(15, 15, 25, 0.9);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
 }
 
 .heatmap-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+    margin-bottom: 10px;
 }
 
 .heatmap-header img {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
 }
 
-.heatmap-name {
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.heatmap-bar-wrapper {
-    margin-top: 4px;
+.heatmap-bar-label {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-bottom: 4px;
 }
 
 .heatmap-bar {
     width: 100%;
-    height: 6px;
+    height: 8px;
     border-radius: 999px;
-    background: rgba(15,23,42,0.9);
+    background: rgba(255,255,255,0.06);
     overflow: hidden;
 }
 
 .heatmap-bar-fill {
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-dark));
-    width: 0;
-    transition: width 0.4s ease;
+    transition: width 0.3s ease;
 }
 
 .heatmap-meta {
-    font-size: 0.75rem;
+    margin-top: 8px;
+    font-size: 0.8rem;
     opacity: 0.9;
 }
 

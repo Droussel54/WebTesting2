@@ -18,15 +18,14 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 // health
 app.get("/health", (req, res) => {
-    const DEV_MODE = process.env.DEV_MODE === "true";
     res.json({
         status: "ok",
         timestamp: new Date().toISOString(),
-        mode: DEV_MODE ? "development" : "production"
+        devMode: process.env.DEV_MODE === "true"
     });
 });
 
-// API routes
+// routes
 app.use("/api/mode", modeRouter);
 app.use("/api/players", playersRouter);
 app.use("/api/player", playerRouter);
