@@ -28,6 +28,10 @@ html, body {
     --radius-sm: 10px;
 
     --haptic-scale: 0.985;
+
+    --bg-base: #0b0b12; 
+    --bg-accent: rgba(255,255,255,0.03); 
+    --bg-glow: none;
 }
 
 /* BACKGROUND – fixed radial + vignette */
@@ -40,6 +44,10 @@ body {
     align-items: center;
     padding-bottom: 40px;
     overflow-x: hidden;
+
+    background: radial-gradient(circle at 50% 20%, var(--bg-accent), var(--bg-base));
+    transition: background 0.6s ease, box-shadow 0.6s ease;
+    box-shadow: var(--bg-glow);
 }
 
 body::before {
@@ -52,6 +60,26 @@ body::before {
         radial-gradient(circle at 80% 0%, rgba(255,255,255,0.06), transparent 55%),
         radial-gradient(circle at 50% 120%, rgba(0,0,0,0.7), #020617 80%);
     transition: background 0.6s ease;
+}
+
+@keyframes dangerPulse {
+    0%   { box-shadow: 0 0 20px rgba(255,60,60,0.2); }
+    50%  { box-shadow: 0 0 40px rgba(255,60,60,0.5); }
+    100% { box-shadow: 0 0 20px rgba(255,60,60,0.2); }
+}
+
+@keyframes safeGlow {
+    0%   { box-shadow: 0 0 20px rgba(0,200,150,0.2); }
+    50%  { box-shadow: 0 0 40px rgba(0,200,150,0.5); }
+    100% { box-shadow: 0 0 20px rgba(0,200,150,0.2); }
+}
+
+body.danger-pulse {
+    animation: dangerPulse 2.5s infinite ease-in-out;
+}
+
+body.safe-glow {
+    animation: safeGlow 3s infinite ease-in-out;
 }
 
 /* HEADER */
@@ -500,6 +528,42 @@ header p {
     margin-bottom: 4px;
 }
 
+#team-threat-wrapper {
+    margin: 46px 0 16px 0;
+}
+
+.team-threat {
+    font-size: 1.4rem;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: rgba(15,15,25,0.9);
+    border: 1px solid var(--accent-border);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    backdrop-filter: blur(12px);
+    display: inline-block;
+}
+
+.team-threat-tooltip {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    background: rgba(15,15,25,0.95);
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.75rem;
+    width: 220px;
+    z-index: 20;
+}
+
+.team-threat-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
 /* Micro-badges */
 .player-badges {
     display: flex;
@@ -638,38 +702,56 @@ header p {
 }
 
 /* Seasonal History Timeline – brighter */
+/* Timeline container */
 .history-timeline {
     position: relative;
     display: flex;
-    gap: 32px;
-    padding: 40px 10px 20px;
+    gap: 48px;
+    padding: 60px 20px 30px;
     overflow-x: auto;
+    scroll-behavior: smooth;
 }
 
-/* Each season node */
+/* Horizontal line */
+.history-timeline::before {
+    content: "";
+    position: absolute;
+    top: 40px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(
+        90deg,
+        rgba(255,255,255,0.18),
+        rgba(255,255,255,0.05)
+    );
+    border-radius: 999px;
+}
+
+/* Each season card */
 .history-node {
     position: relative;
-    min-width: 200px;
-    padding: 14px 16px;
+    min-width: 220px;
+    padding: 16px 18px;
     border-radius: 14px;
-    background: rgba(15, 15, 25, 0.9);
+    background: rgba(15, 15, 25, 0.92);
     border: 1px solid rgba(255,255,255,0.08);
     backdrop-filter: blur(12px);
-    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    box-shadow: 0 4px 22px rgba(0,0,0,0.55);
 }
 
-/* The dot that sits ON the line */
+/* Dot on the line */
 .history-node::before {
     content: "";
     position: absolute;
-    top: -22px;
+    top: -28px;
     left: 50%;
     transform: translateX(-50%);
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 999px;
     background: var(--accent);
-    box-shadow: 0 0 12px var(--accent);
+    box-shadow: 0 0 14px var(--accent);
     border: 2px solid rgba(255,255,255,0.4);
 }
 
@@ -677,18 +759,18 @@ header p {
 .history-node-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
+    gap: 12px;
+    margin-bottom: 10px;
 }
 
 .history-node-header img {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
 }
 
 .history-node-season {
-    font-weight: 600;
-    font-size: 1rem;
+    font-weight: 700;
+    font-size: 1.05rem;
     letter-spacing: 0.02em;
 }
 
@@ -697,7 +779,7 @@ header p {
     font-size: 0.85rem;
     opacity: 0.9;
     display: grid;
-    gap: 3px;
+    gap: 4px;
 }
 
 /* Operators Heatmap – brighter */

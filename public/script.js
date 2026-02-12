@@ -10,6 +10,9 @@ const fetchBtn = document.getElementById("fetch-btn");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const clearTeamBtn = document.getElementById("clear-team-btn");
+const teamThreatWrapper = document.getElementById("team-threat-wrapper");
+const teamThreatEl = document.getElementById("team-threat");
+const teamThreatTooltip = document.getElementById("team-threat-tooltip");
 
 const historyModal = document.getElementById("history-modal");
 const historyTitle = document.getElementById("history-title");
@@ -188,6 +191,10 @@ clearTeamBtn.addEventListener("click", () => {
     statusEl.textContent = "";
     resultsEl.innerHTML = "";
     resultsEl.classList.remove("visible");
+    teamThreatEl.classList.add("hidden");
+    teamThreatEl.classList.remove("visible");
+    teamThreatTooltip.classList.add("hidden");
+    teamThreatTooltip.classList.remove("visible");
 
     // restore original theme
     root.style.setProperty("--accent", defaultTheme.accent);
@@ -262,6 +269,32 @@ fetchBtn.addEventListener("click", async () => {
 // Render results
 // -------------------------------------------------------------
 function renderResults(results) {
+    const teamThreat = computeTeamThreatScore(results); 
+    const breakdown = computeTeamThreatBreakdown(results);
+    
+    teamThreatEl.textContent = `Team Threat Score: ${teamThreat}%`;
+    teamThreatEl.classList.remove("hidden");
+    teamThreatEl.classList.add("visible");
+
+    teamThreatWrapper.addEventListener("mouseenter", () => {
+       teamThreatTooltip.classList.remove("hidden");
+        teamThreatTooltip.classList.add("visible");
+    });
+
+    teamThreatWrapper.addEventListener("mouseleave", () => {
+        teamThreatTooltip.classList.remove("visible");
+        teamThreatTooltip.classList.add("hidden");
+    });
+
+    teamThreatTooltip.innerHTML = breakdown.map(b => `
+        <div class="team-threat-line">
+            <span>${b.label}</span>
+            <span>${b.value}%</span>
+        </div>
+    `).join("");
+
+    applyThreatBackground(teamThreat);
+
     resultsEl.innerHTML = "";
 
     results.forEach(r => {
@@ -397,6 +430,37 @@ function renderResults(results) {
 }
 
 // -------------------------------------------------------------
+// Threat Background
+// -------------------------------------------------------------
+function applyThreatBackground(teamThreat) {
+    if (teamThreat > 75) {
+        // Danger pulse
+        root.style.setProperty("--bg-accent", "rgba(255, 60, 60, 0.15)");
+        root.style.setProperty("--bg-glow", "0 0 40px rgba(255, 60, 60, 0.4)");
+
+        document.body.classList.add("danger-pulse");
+        document.body.classList.remove("safe-glow");
+    }
+    else if (teamThreat < 40) {
+        // Safe glow
+        root.style.setProperty("--bg-accent", "rgba(0, 200, 150, 0.15)");
+        root.style.setProperty("--bg-glow", "0 0 40px rgba(0, 200, 150, 0.4)");
+
+        document.body.classList.add("safe-glow");
+        document.body.classList.remove("danger-pulse");
+    }
+    else {
+        // Neutral
+        root.style.setProperty("--bg-accent", "rgba(255,255,255,0.03)");
+        root.style.setProperty("--bg-glow", "none");
+
+        document.body.classList.remove("danger-pulse");
+        document.body.classList.remove("safe-glow");
+    }
+}
+
+
+// -------------------------------------------------------------
 // Seasonal history – timeline
 // -------------------------------------------------------------
 resultsEl.addEventListener("click", async (e) => {
@@ -411,10 +475,20 @@ resultsEl.addEventListener("click", async (e) => {
 
     const res = await fetch(`/api/seasonal?username=${username}&platform=${platform}`);
     const data = await res.json();
+    const history = [...(data.history || [])];
+
+    // Sort newest → oldest
+    history.sort((a, b) => {
+        const A = parseSeason(a.season);
+        const B = parseSeason(b.season);
+
+        if (A.year !== B.year) return B.year - A.year;
+        return B.season - A.season;
+    });
 
     historyTimeline.innerHTML = "";
 
-    (data.history || []).forEach(h => {
+    history.forEach(h => {
         const node = document.createElement("div");
         node.className = "history-node";
 
@@ -428,9 +502,9 @@ resultsEl.addEventListener("click", async (e) => {
             </div>
 
             <div class="history-node-body">
-                <div>MMR: ${h.mmr} (max ${h.maxMmr})</div>
-                <div>Rank: ${RANK_NAME_MAP[h.rank] || "—"}</div>
-                <div>Max: ${RANK_NAME_MAP[h.maxRank] || "—"}</div>
+                <div><strong>MMR:</strong> ${h.mmr} <span style="opacity:0.7;">(max ${h.maxMmr})</span></div>
+                <div><strong>Rank:</strong> ${RANK_NAME_MAP[h.rank] || "—"}</div>
+                <div><strong>Max Rank:</strong> ${RANK_NAME_MAP[h.maxRank] || "—"}</div>
             </div>
         `;
 
@@ -508,6 +582,17 @@ resultsEl.addEventListener("click", async (e) => {
 // -------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------
+function parseSeason(seasonStr) {
+    // Example: "Y9S4"
+    const match = seasonStr.match(/Y(\d+)S(\d+)/i);
+    if (!match) return { year: 0, season: 0 };
+
+    return {
+        year: parseInt(match[1], 10),
+        season: parseInt(match[2], 10)
+    };
+}
+
 function capitalize(name) {
     if (!name) return "";
     return name.charAt(0).toUpperCase() + name.slice(1);
@@ -573,6 +658,66 @@ function computeThreatBreakdown(d) {
         { label: "Winrate", value: Math.round(winrate * 15) },
         { label: "Streak", value: Math.round(Math.max(Math.min(mmrDelta / 40, 1), -1) * 10) },
         { label: "Op Diversity", value: Math.round(Math.min(opCount / 6, 1) * 5) }
+    ];
+}
+
+function computeTeamThreatScore(results) {
+    const valid = results.filter(r => r.success).map(r => r.data);
+    if (valid.length === 0) return 0;
+
+    let weightedSum = 0;
+    let weightTotal = 0;
+
+    valid.forEach(p => {
+        const threat = computeThreatScore(p);
+        const rankWeight = Math.max(p.ranked?.rank ?? 0, 1); // higher rank = more influence
+        weightedSum += threat * rankWeight;
+        weightTotal += rankWeight;
+    });
+
+    return Math.round(weightedSum / weightTotal);
+}
+
+function computeTeamThreatBreakdown(results) {
+    const valid = results.filter(r => r.success).map(r => r.data);
+    if (valid.length === 0) return [];
+
+    let rankSum = 0;
+    let mmrSum = 0;
+    let kdSum = 0;
+    let winSum = 0;
+    let streakSum = 0;
+    let diversitySum = 0;
+
+    valid.forEach(p => {
+        const kills = p.general.kills;
+        const deaths = p.general.deaths;
+        const matchesWon = p.general.matchesWon;
+        const matchesLost = p.general.matchesLost;
+        const totalMatches = matchesWon + matchesLost;
+
+        const kd = deaths > 0 ? kills / deaths : 1;
+        const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0.5;
+        const mmrDelta = p.ranked.lastMatchMmrChange ?? 0;
+        const opCount = (p.operators || []).length;
+
+        rankSum     += Math.min(p.ranked.rank / 35, 1) * 30;
+        mmrSum      += Math.min(p.ranked.mmr / 6000, 1) * 20;
+        kdSum       += Math.min(kd / 2.5, 1) * 20;
+        winSum      += winrate * 15;
+        streakSum   += Math.max(Math.min(mmrDelta / 40, 1), -1) * 10;
+        diversitySum+= Math.min(opCount / 6, 1) * 5;
+    });
+
+    const count = valid.length;
+
+    return [
+        { label: "Rank", value: Math.round(rankSum / count) },
+        { label: "MMR", value: Math.round(mmrSum / count) },
+        { label: "K/D", value: Math.round(kdSum / count) },
+        { label: "Winrate", value: Math.round(winSum / count) },
+        { label: "Streak", value: Math.round(streakSum / count) },
+        { label: "Op Diversity", value: Math.round(diversitySum / count) }
     ];
 }
 
