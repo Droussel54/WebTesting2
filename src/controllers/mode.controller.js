@@ -1,24 +1,14 @@
 // src/controllers/mode.controller.js
+let demoMode = false;
+let devMode = true;
 
-export function isDevMode() {
-    return process.env.DEV_MODE === "true";
-}
-
-let demoMode = isDevMode(); // demo = true in dev by default, false in prod
-
-export function getMode(req, res) {
-    res.json({
-        devMode: isDevMode(),
-        demoMode
-    });
+export function getMode(_req, res) {
+    res.json({ demoMode, devMode });
 }
 
 export function setMode(req, res) {
-    if (!isDevMode()) {
-        return res.status(403).json({ error: "Mode toggle only allowed in DEV_MODE" });
-    }
     demoMode = !!req.body.demoMode;
-    res.json({ devMode: true, demoMode });
+    res.json({ demoMode, devMode });
 }
 
 export function isDemoMode() {

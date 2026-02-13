@@ -701,8 +701,7 @@ header p {
     transform: scale(var(--haptic-scale));
 }
 
-/* Seasonal History Timeline – brighter */
-/* Timeline container */
+/* Seasonal History Timeline */
 .history-timeline {
     position: relative;
     display: flex;
@@ -782,7 +781,7 @@ header p {
     gap: 4px;
 }
 
-/* Operators Heatmap – brighter */
+/* Operators Heatmap */
 .operators-heatmap {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));

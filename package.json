@@ -1,16 +1,17 @@
 {
   "name": "r6-ubisoft-api",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "bootstrap.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node bootstrap.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "r6api.js": "^4.0.0"
   }
 }

@@ -1,12 +1,9 @@
 // server.js
-import dotenv from "dotenv";
-dotenv.config(); // MUST be first, before ANY other imports
+import { createApp } from "./src/utils/app.js";
 
-import app from "./src/app.js";
+const port = process.env.PORT || 3000;
+const app = createApp();
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
-    console.log(`DEV_MODE=${process.env.DEV_MODE}`);
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
 });

@@ -1,5 +1,5 @@
 // src/controllers/seasonal.controller.js
-import { getSeasonalHistory } from "../services/ubisoft.service.js";
+import { getSeasonalHistory } from "../services/r6.service.js";
 
 export async function getSeasonal(req, res) {
     const { username, platform } = req.query;
@@ -9,10 +9,9 @@ export async function getSeasonal(req, res) {
     }
 
     try {
-        const history = await getSeasonalHistory(username, platform || "pc");
+        const history = await getSeasonalHistory(platform || "pc", username);
         res.json({ username, history });
     } catch (err) {
-        console.error("Error in /api/seasonal:", err);
-        res.status(500).json({ error: "Failed to fetch seasonal history" });
+        res.status(500).json({ error: "Failed to fetch seasonal history." });
     }
 }

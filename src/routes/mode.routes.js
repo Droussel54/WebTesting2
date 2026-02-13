@@ -3,7 +3,6 @@ import { Router } from "express";
 import { getMode, setMode } from "../controllers/mode.controller.js";
 
 const router = Router();
-
 router.get("/", getMode);
 router.post("/", setMode);
 

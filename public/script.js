@@ -24,7 +24,62 @@ const operatorsHeatmap = document.getElementById("operators-heatmap");
 
 const modeToggleBtn = document.getElementById("mode-toggle");
 
-// capture default theme so we can restore on clear
+// -------------------------------------------------------------
+// Error UI helpers
+// -------------------------------------------------------------
+function showError(msg) {
+    let box = document.getElementById("error-box");
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "error-box";
+        box.style.cssText = `
+            background: rgba(255, 80, 80, 0.15);
+            border: 1px solid rgba(255, 80, 80, 0.4);
+            padding: 10px 14px;
+            border-radius: 6px;
+            color: #ff6b6b;
+            font-weight: 600;
+            margin-bottom: 12px;
+        `;
+        statusEl.parentNode.insertBefore(box, statusEl);
+    }
+    box.textContent = msg;
+    box.classList.remove("hidden");
+}
+
+function clearError() {
+    const box = document.getElementById("error-box");
+    if (box) {
+        box.textContent = "";
+        box.classList.add("hidden");
+    }
+}
+
+// -------------------------------------------------------------
+// Safe fetch wrapper
+// -------------------------------------------------------------
+async function fetchJSON(url, options = {}) {
+    try {
+        const res = await fetch(url, options);
+
+        if (!res.ok) {
+            return { error: `HTTP ${res.status}` };
+        }
+
+        const data = await res.json();
+        if (data.error) {
+            return { error: data.error };
+        }
+
+        return data;
+    } catch (err) {
+        return { error: "Network error" };
+    }
+}
+
+// -------------------------------------------------------------
+// Capture default theme
+// -------------------------------------------------------------
 const root = document.documentElement;
 const defaultTheme = {
     accent: getComputedStyle(root).getPropertyValue("--accent").trim(),
@@ -34,7 +89,9 @@ const defaultTheme = {
     accentDark: getComputedStyle(root).getPropertyValue("--accent-dark").trim()
 };
 
-// close buttons
+// -------------------------------------------------------------
+// Close modals
+// -------------------------------------------------------------
 document.querySelectorAll(".close-modal").forEach(btn => {
     btn.addEventListener("click", () => {
         historyModal.classList.add("hidden");
@@ -42,35 +99,28 @@ document.querySelectorAll(".close-modal").forEach(btn => {
     });
 });
 
-// backdrop click closes modals
 [historyModal, operatorsModal].forEach(modal => {
     modal.addEventListener("click", (e) => {
-        if (e.target === modal) {
-            modal.classList.add("hidden");
-        }
+        if (e.target === modal) modal.classList.add("hidden");
     });
 });
 
 // -------------------------------------------------------------
-// Mode handling (Live vs Demo)
+// Mode handling
 // -------------------------------------------------------------
 let devMode = false;
 let demoMode = false;
 
 async function loadMode() {
-    try {
-        const res = await fetch("/api/mode");
-        const data = await res.json();
+    const data = await fetchJSON("/api/mode");
+    if (data.error) return;
 
-        devMode = !!data.devMode;
-        demoMode = !!data.demoMode;
+    devMode = !!data.devMode;
+    demoMode = !!data.demoMode;
 
-        if (devMode) {
-            modeToggleBtn.classList.remove("hidden");
-            updateModeButton();
-        }
-    } catch (err) {
-        console.error("Failed to load mode:", err);
+    if (devMode) {
+        modeToggleBtn.classList.remove("hidden");
+        updateModeButton();
     }
 }
 
@@ -81,19 +131,19 @@ function updateModeButton() {
 modeToggleBtn.addEventListener("click", async () => {
     if (!devMode) return;
 
-    try {
-        const res = await fetch("/api/mode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ demoMode: !demoMode })
-        });
+    const data = await fetchJSON("/api/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ demoMode: !demoMode })
+    });
 
-        const data = await res.json();
-        demoMode = !!data.demoMode;
-        updateModeButton();
-    } catch (err) {
-        console.error("Failed to toggle mode:", err);
+    if (data.error) {
+        showError(data.error);
+        return;
     }
+
+    demoMode = !!data.demoMode;
+    updateModeButton();
 });
 
 // -------------------------------------------------------------
@@ -124,18 +174,18 @@ function attachRipple() {
 }
 
 // -------------------------------------------------------------
-// Rank color engine (canonical-ish community colors)
+// Rank color engine
 // -------------------------------------------------------------
 function getRankTierColor(rank) {
-    if (rank >= 30) return "#ff4d6d"; // Champion
-    if (rank >= 27) return "#4db8ff"; // Diamond
-    if (rank >= 24) return "#00c896"; // Emerald
-    if (rank >= 21) return "#9fd5ff"; // Platinum
-    if (rank >= 18) return "#f2c94c"; // Gold
-    if (rank >= 15) return "#c0c0c0"; // Silver
-    if (rank >= 12) return "#cd7f32"; // Bronze
-    if (rank >= 9)  return "#b87333"; // Copper
-    return "#9ca3af";                 // Unranked
+    if (rank >= 30) return "#ff4d6d";
+    if (rank >= 27) return "#4db8ff";
+    if (rank >= 24) return "#00c896";
+    if (rank >= 21) return "#9fd5ff";
+    if (rank >= 18) return "#f2c94c";
+    if (rank >= 15) return "#c0c0c0";
+    if (rank >= 12) return "#cd7f32";
+    if (rank >= 9)  return "#b87333";
+    return "#9ca3af";
 }
 
 function darkenHex(hex, factor = 0.4) {
@@ -172,7 +222,6 @@ function applyMatchTheme(results) {
     root.style.setProperty("--accent-hover", hexToRgba(base, 0.6));
     root.style.setProperty("--accent-dark", dark);
 
-    // Glow for Diamond+
     if (highestRank >= 27) {
         root.style.setProperty("--accent-glow", `0 0 18px ${hexToRgba(base, 0.8)}`);
     } else {
@@ -184,19 +233,17 @@ function applyMatchTheme(results) {
 }
 
 // -------------------------------------------------------------
-// Clear team / players
+// Clear team
 // -------------------------------------------------------------
 clearTeamBtn.addEventListener("click", () => {
+    clearError();
     document.querySelectorAll("input[data-player]").forEach(i => i.value = "");
     statusEl.textContent = "";
     resultsEl.innerHTML = "";
     resultsEl.classList.remove("visible");
     teamThreatEl.classList.add("hidden");
-    teamThreatEl.classList.remove("visible");
     teamThreatTooltip.classList.add("hidden");
-    teamThreatTooltip.classList.remove("visible");
 
-    // restore original theme
     root.style.setProperty("--accent", defaultTheme.accent);
     root.style.setProperty("--accent-soft", defaultTheme.accentSoft);
     root.style.setProperty("--accent-border", defaultTheme.accentBorder);
@@ -211,6 +258,8 @@ clearTeamBtn.addEventListener("click", () => {
 // Fetch players
 // -------------------------------------------------------------
 fetchBtn.addEventListener("click", async () => {
+    clearError();
+
     const inputs = document.querySelectorAll("input[data-player]");
     const selects = document.querySelectorAll("select[data-platform]");
 
@@ -226,7 +275,7 @@ fetchBtn.addEventListener("click", async () => {
     });
 
     if (players.length === 0) {
-        statusEl.textContent = "Enter at least one username.";
+        showError("Enter at least one username.");
         return;
     }
 
@@ -241,28 +290,28 @@ fetchBtn.addEventListener("click", async () => {
         resultsEl.appendChild(sk);
     }
 
-    try {
-        const res = await fetch("/api/players", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ players })
-        });
+    const data = await fetchJSON("/api/players", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ players })
+    });
 
-        const data = await res.json();
+    if (data.error) {
         statusEl.textContent = "";
-
-        applyMatchTheme(data.results);
-        renderResults(data.results);
-        attachRipple();
-
-        resultsEl.classList.remove("hidden");
-        requestAnimationFrame(() => {
-            resultsEl.classList.add("visible");
-        });
-    } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Unexpected error. Check console.";
+        showError(data.error);
+        resultsEl.innerHTML = "";
+        return;
     }
+
+    statusEl.textContent = "";
+    applyMatchTheme(data.results);
+    renderResults(data.results);
+    attachRipple();
+
+    resultsEl.classList.remove("hidden");
+    requestAnimationFrame(() => {
+        resultsEl.classList.add("visible");
+    });
 });
 
 // -------------------------------------------------------------
@@ -274,15 +323,12 @@ function renderResults(results) {
     
     teamThreatEl.textContent = `Team Threat Score: ${teamThreat}%`;
     teamThreatEl.classList.remove("hidden");
-    teamThreatEl.classList.add("visible");
 
     teamThreatWrapper.addEventListener("mouseenter", () => {
        teamThreatTooltip.classList.remove("hidden");
-        teamThreatTooltip.classList.add("visible");
     });
 
     teamThreatWrapper.addEventListener("mouseleave", () => {
-        teamThreatTooltip.classList.remove("visible");
         teamThreatTooltip.classList.add("hidden");
     });
 
@@ -316,17 +362,16 @@ function renderResults(results) {
 
         const d = r.data;
 
-        // --- Compute stats ---
         const kills = d.general?.kills ?? 0;
         const deaths = d.general?.deaths ?? 0;
-        const matchesWon = d.general?.matchesWon ?? 0;
-        const matchesLost = d.general?.matchesLost ?? 0;
+        const wins = d.general?.wins ?? 0;
+        const losses = d.general?.losses ?? 0;
 
         const kd = deaths > 0 ? (kills / deaths).toFixed(2) : "—";
-        const wl = `${matchesWon}/${matchesLost}`;
+        const wl = `${wins}/${losses}`;
         const seasonLabel = d.ranked?.season || "—";
 
-        const mmrDelta = d.ranked.lastMatchMmrChange || 0;
+        const mmrDelta = d.ranked?.lastMatchMmrChange ?? 0;
         const mmrDeltaColor = getMMRDeltaColor(mmrDelta);
         const mmrDeltaText = mmrDelta === 0 ? "" :
             `<span class="mmr-delta" style="color:${mmrDeltaColor}">
@@ -346,10 +391,9 @@ function renderResults(results) {
         const breakdown = computeThreatBreakdown(d);
         const badges = computeBadges(d);
 
-        // --- Build card ---
         card.innerHTML = `
             <div class="player-rank-icon">
-                <img src="${getRankIcon(d.ranked.rank)}" alt="Rank Icon" />
+                <img src="${getRankIcon(d.ranked?.rank ?? 0)}" alt="Rank Icon" />
             </div>
 
             <div class="player-strip">
@@ -360,8 +404,8 @@ function renderResults(results) {
                         <span>${platformLabel}</span>
                     </span>
                     <span class="player-rank-line">
-                        <strong>${RANK_NAME_MAP[d.ranked.rank] || "Unranked"}</strong>
-                        — ${d.ranked.mmr ?? "—"} MMR ${mmrDeltaText}
+                        <strong>${RANK_NAME_MAP[d.ranked?.rank ?? 0] || "Unranked"}</strong>
+                        — ${d.ranked?.mmr ?? "—"} MMR ${mmrDeltaText}
                     </span>
                 </div>
 
@@ -392,7 +436,6 @@ function renderResults(results) {
                     </div>
                 </div>
 
-                <!-- ⭐ NEW: KD / W/L / Season row -->
                 <div class="player-meta">
                     <span class="player-meta-item">K/D: ${kd}</span>
                     <span class="player-meta-item">W/L: ${wl}</span>
@@ -434,34 +477,27 @@ function renderResults(results) {
 // -------------------------------------------------------------
 function applyThreatBackground(teamThreat) {
     if (teamThreat > 75) {
-        // Danger pulse
         root.style.setProperty("--bg-accent", "rgba(255, 60, 60, 0.15)");
         root.style.setProperty("--bg-glow", "0 0 40px rgba(255, 60, 60, 0.4)");
-
         document.body.classList.add("danger-pulse");
         document.body.classList.remove("safe-glow");
     }
     else if (teamThreat < 40) {
-        // Safe glow
         root.style.setProperty("--bg-accent", "rgba(0, 200, 150, 0.15)");
         root.style.setProperty("--bg-glow", "0 0 40px rgba(0, 200, 150, 0.4)");
-
         document.body.classList.add("safe-glow");
         document.body.classList.remove("danger-pulse");
     }
     else {
-        // Neutral
         root.style.setProperty("--bg-accent", "rgba(255,255,255,0.03)");
         root.style.setProperty("--bg-glow", "none");
-
         document.body.classList.remove("danger-pulse");
         document.body.classList.remove("safe-glow");
     }
 }
 
-
 // -------------------------------------------------------------
-// Seasonal history – timeline
+// Seasonal history modal
 // -------------------------------------------------------------
 resultsEl.addEventListener("click", async (e) => {
     const btn = e.target.closest(".history-btn");
@@ -473,15 +509,21 @@ resultsEl.addEventListener("click", async (e) => {
     historyTimeline.innerHTML = "";
     historyTitle.textContent = `Seasonal History – ${username}`;
 
-    const res = await fetch(`/api/seasonal?username=${username}&platform=${platform}`);
-    const data = await res.json();
+    const data = await fetchJSON(`/api/seasonal?username=${username}&platform=${platform}`);
+
+    if (data.error) {
+        historyTimeline.innerHTML = `
+            <div class="history-error">${data.error}</div>
+        `;
+        historyModal.classList.remove("hidden");
+        return;
+    }
+
     const history = [...(data.history || [])];
 
-    // Sort newest → oldest
     history.sort((a, b) => {
         const A = parseSeason(a.season);
         const B = parseSeason(b.season);
-
         if (A.year !== B.year) return B.year - A.year;
         return B.season - A.season;
     });
@@ -524,16 +566,27 @@ resultsEl.addEventListener("click", async (e) => {
     const username = btn.dataset.username;
     const platform = btn.dataset.platform;
 
-    const res = await fetch(`/api/player?username=${username}&platform=${platform}`);
-    const data = await res.json();
+    const data = await fetchJSON(`/api/player?username=${username}&platform=${platform}`);
+
+    if (data.error) {
+        operatorsHeatmap.innerHTML = `
+            <div class="history-error">${data.error}</div>
+        `;
+        operatorsModal.classList.remove("hidden");
+        return;
+    }
 
     operatorsTitle.textContent = `Operators – ${data.username}`;
     operatorsHeatmap.innerHTML = "";
 
     const ops = data.operators || [];
-    if (ops.length === 0) return;
+    if (ops.length === 0) {
+        operatorsHeatmap.innerHTML = `<div class="history-error">No operator data available.</div>`;
+        operatorsModal.classList.remove("hidden");
+        return;
+    }
 
-    const maxUsage = Math.max(...ops.map(o => o.kills + o.deaths), 1);
+    const maxUsage = Math.max(...ops.map(o => (o.kills + o.deaths)), 1);
 
     ops
         .slice()
@@ -583,8 +636,7 @@ resultsEl.addEventListener("click", async (e) => {
 // Helpers
 // -------------------------------------------------------------
 function parseSeason(seasonStr) {
-    // Example: "Y9S4"
-    const match = seasonStr.match(/Y(\d+)S(\d+)/i);
+    const match = seasonStr?.match(/Y(\d+)S(\d+)/i);
     if (!match) return { year: 0, season: 0 };
 
     return {
@@ -611,49 +663,48 @@ function computeThreatScore(d) {
     const mmr = d.ranked?.mmr ?? 0;
     const kills = d.general?.kills ?? 0;
     const deaths = d.general?.deaths ?? 0;
-    const matchesWon = d.general?.matchesWon ?? 0;
-    const matchesLost = d.general?.matchesLost ?? 0;
-    const totalMatches = matchesWon + matchesLost;
+    const wins = d.general?.wins ?? 0;
+    const losses = d.general?.losses ?? 0;
+    const totalMatches = wins + losses;
 
     const kd = deaths > 0 ? kills / deaths : 1;
-    const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0.5;
+    const winrate = totalMatches > 0 ? wins / totalMatches : 0.5;
     const mmrDelta = d.ranked?.lastMatchMmrChange ?? 0;
     const opCount = (d.operators || []).length;
 
-    // normalize
-    const rankScore = Math.min(rank / 35, 1);          // 0–1
-    const mmrScore = Math.min(mmr / 6000, 1);          // 0–1
-    const kdScore = Math.min(kd / 2.5, 1);             // 0–1
-    const winScore = winrate;                          // 0–1
-    const streakScore = Math.max(Math.min(mmrDelta / 40, 1), -1); // -1–1
-    const diversityScore = opCount >= 6 ? 1 : opCount / 6;        // 0–1
+    const rankScore = Math.min(rank / 35, 1);
+    const mmrScore = Math.min(mmr / 6000, 1);
+    const kdScore = Math.min(kd / 2.5, 1);
+    const winScore = winrate;
+    const streakScore = Math.max(Math.min(mmrDelta / 40, 1), -1);
+    const diversityScore = opCount >= 6 ? 1 : opCount / 6;
 
     let score = 0;
     score += rankScore * 30;
     score += mmrScore * 20;
     score += kdScore * 20;
     score += winScore * 15;
-    score += (streakScore * 10);       // hot/cold streak
-    score += diversityScore * 5;       // more ops = more adaptable
+    score += (streakScore * 10);
+    score += diversityScore * 5;
 
     return Math.round(Math.max(0, Math.min(100, score)));
 }
 
 function computeThreatBreakdown(d) {
-    const kills = d.general.kills;
-    const deaths = d.general.deaths;
-    const matchesWon = d.general.matchesWon;
-    const matchesLost = d.general.matchesLost;
-    const totalMatches = matchesWon + matchesLost;
+    const kills = d.general?.kills ?? 0;
+    const deaths = d.general?.deaths ?? 0;
+    const wins = d.general?.wins ?? 0;
+    const losses = d.general?.losses ?? 0;
+    const totalMatches = wins + losses;
 
     const kd = deaths > 0 ? kills / deaths : 1;
-    const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0.5;
-    const mmrDelta = d.ranked.lastMatchMmrChange ?? 0;
+    const winrate = totalMatches > 0 ? wins / totalMatches : 0.5;
+    const mmrDelta = d.ranked?.lastMatchMmrChange ?? 0;
     const opCount = (d.operators || []).length;
 
     return [
-        { label: "Rank", value: Math.round(Math.min(d.ranked.rank / 35, 1) * 30) },
-        { label: "MMR", value: Math.round(Math.min(d.ranked.mmr / 6000, 1) * 20) },
+        { label: "Rank", value: Math.round(Math.min((d.ranked?.rank ?? 0) / 35, 1) * 30) },
+        { label: "MMR", value: Math.round(Math.min((d.ranked?.mmr ?? 0) / 6000, 1) * 20) },
         { label: "K/D", value: Math.round(Math.min(kd / 2.5, 1) * 20) },
         { label: "Winrate", value: Math.round(winrate * 15) },
         { label: "Streak", value: Math.round(Math.max(Math.min(mmrDelta / 40, 1), -1) * 10) },
@@ -670,7 +721,7 @@ function computeTeamThreatScore(results) {
 
     valid.forEach(p => {
         const threat = computeThreatScore(p);
-        const rankWeight = Math.max(p.ranked?.rank ?? 0, 1); // higher rank = more influence
+        const rankWeight = Math.max(p.ranked?.rank ?? 0, 1);
         weightedSum += threat * rankWeight;
         weightTotal += rankWeight;
     });
@@ -690,19 +741,19 @@ function computeTeamThreatBreakdown(results) {
     let diversitySum = 0;
 
     valid.forEach(p => {
-        const kills = p.general.kills;
-        const deaths = p.general.deaths;
-        const matchesWon = p.general.matchesWon;
-        const matchesLost = p.general.matchesLost;
-        const totalMatches = matchesWon + matchesLost;
+        const kills = p.general?.kills ?? 0;
+        const deaths = p.general?.deaths ?? 0;
+        const wins = p.general?.wins ?? 0;
+        const losses = p.general?.losses ?? 0;
+        const totalMatches = wins + losses;
 
         const kd = deaths > 0 ? kills / deaths : 1;
-        const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0.5;
-        const mmrDelta = p.ranked.lastMatchMmrChange ?? 0;
+        const winrate = totalMatches > 0 ? wins / totalMatches : 0.5;
+        const mmrDelta = p.ranked?.lastMatchMmrChange ?? 0;
         const opCount = (p.operators || []).length;
 
-        rankSum     += Math.min(p.ranked.rank / 35, 1) * 30;
-        mmrSum      += Math.min(p.ranked.mmr / 6000, 1) * 20;
+        rankSum     += Math.min((p.ranked?.rank ?? 0) / 35, 1) * 30;
+        mmrSum      += Math.min((p.ranked?.mmr ?? 0) / 6000, 1) * 20;
         kdSum       += Math.min(kd / 2.5, 1) * 20;
         winSum      += winrate * 15;
         streakSum   += Math.max(Math.min(mmrDelta / 40, 1), -1) * 10;
@@ -724,12 +775,12 @@ function computeTeamThreatBreakdown(results) {
 function computeBadges(d) {
     const kills = d.general?.kills ?? 0;
     const deaths = d.general?.deaths ?? 0;
-    const matchesWon = d.general?.matchesWon ?? 0;
-    const matchesLost = d.general?.matchesLost ?? 0;
-    const totalMatches = matchesWon + matchesLost;
+    const wins = d.general?.wins ?? 0;
+    const losses = d.general?.losses ?? 0;
+    const totalMatches = wins + losses;
 
     const kd = deaths > 0 ? kills / deaths : 0;
-    const winrate = totalMatches > 0 ? matchesWon / totalMatches : 0;
+    const winrate = totalMatches > 0 ? wins / totalMatches : 0;
     const mmrDelta = d.ranked?.lastMatchMmrChange ?? 0;
     const opCount = (d.operators || []).length;
 
@@ -739,7 +790,7 @@ function computeBadges(d) {
     if (winrate >= 0.55) badges.push("High Winrate");
     if (mmrDelta >= 20) badges.push("Big MMR Gain");
     if (opCount <= 3 && opCount > 0) badges.push("One‑Trick Pool");
-    if (d.ranked?.rank >= 30) badges.push("Top Tier");
+    if ((d.ranked?.rank ?? 0) >= 30) badges.push("Top Tier");
     if (totalMatches >= 300) badges.push("Veteran");
 
     return badges;

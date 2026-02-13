@@ -1,5 +1,5 @@
 // src/controllers/player.controller.js
-import { getSinglePlayer } from "../services/ubisoft.service.js";
+import { getPlayerFullStats } from "../services/r6.service.js";
 
 export async function getPlayer(req, res) {
     const { username, platform } = req.query;
@@ -9,10 +9,14 @@ export async function getPlayer(req, res) {
     }
 
     try {
-        const data = await getSinglePlayer(username, platform || "pc");
+        const data = await getPlayerFullStats(platform || "pc", username);
+
+        if (!data) {
+            return res.status(404).json({ error: "Player not found" });
+        }
+
         res.json(data);
     } catch (err) {
-        console.error("Error in /api/player:", err);
-        res.status(500).json({ error: "Failed to fetch player" });
+        res.status(500).json({ error: "Failed to fetch player." });
     }
 }
